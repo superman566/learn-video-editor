@@ -65,9 +65,88 @@ const uploadVideo = async (req, res, handleErr) => {
 
 }
 
+const getVideoAsset = async (req, res, handleErr) => {
+    const videoId = req.params.get('videoId');
+    const type = req.params.get('type');
+    const videoDir = `./storage/${videoId}`;
+
+    DB.update();
+    const video = DB.videos.find((video) => video.videoId === videoId);
+
+    if (!video) return handleErr({status: 404, message: 'Video not found'});
+
+    let file;
+    let mimeType;
+    let fileName; // final file name for downloading
+    switch (type) {
+        case 'thumbnail':
+            file = await fs.open(`${videoDir}/thumbnail.jpg`, 'r');
+            mimeType = 'image/jpeg';
+            break;
+        case 'audio':
+            file = await fs.open(`${videoDir}/audio.acc`, 'r');
+            mimeType = 'audio/acc';
+            fileName = `${video.name}-audio.aac`;
+            break;
+        case 'resize':
+            const dimensions = req.params.get('dimension');
+            file = await fs.open(`${videoDir}/${dimensions}.${video.extension}`, 'r');
+            mimeType = 'video/mp4';
+            fileName = `${video.name}-${dimensions}.${video.extension}`;
+            break;
+        case 'original':
+            file = await fs.open(`${videoDir}/original.${video.extension}`, 'r');
+            mimeType = 'video/mp4';
+            fileName = `${video.name}.${video.extension}`;
+            break;
+    }
+    const stat = await file.stat();
+    const fileStream = file.createReadStream();
+
+    if (type !== 'thumbnail') {
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    }
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', stat.size);
+    res.status(200);
+    await pipeline(fileStream, res);
+    file.close();
+}
+
+const extractAudio = async (req, res, handleErr) => {
+    const videoId = req.params.get('videoId');
+    DB.update();
+    const video = DB.videos.find((video) => video.videoId === videoId);
+    
+    if (!video) return handleErr({status: 404, message: 'Video not found'});
+    
+    if (video.extractedAudio) {
+        return handleErr({status: 400, message: 'Audio already extracted'});
+    }
+
+    const videoDir = `./storage/${videoId}`;
+    const originVideoPath = `${videoDir}/original.${video.extension}`;
+    const targetAudioPath = `${videoDir}/audio.aac`;
+    try {
+        await FF.extractAudio(originVideoPath, targetAudioPath);
+
+        video.extractedAudio = true;
+        DB.save();
+        res.status(200).json({
+            status: 'success',
+            message: 'Audio extracted successfully'
+        });
+    } catch (e) {
+        util.deleteFile(targetAudioPath);
+        return handleErr(e);
+    }
+
+}
 const controller = {
     getVideos,
-    uploadVideo
+    uploadVideo,
+    getVideoAsset,
+    extractAudio
 };
 
 module.exports = controller;
