@@ -5,8 +5,10 @@ const { pipeline } = require('node:stream/promises');
 
 const util = require('../../lib/util.js');
 const FF = require('../../lib/FF.js');
+const JobQueue = require('../../lib/JobQueue.js');
 const DB = require("../DB.js");
 
+const jobs = new JobQueue();
 
 const getVideos = (req, res, handleErr) => {
     DB.update();
@@ -89,8 +91,8 @@ const getVideoAsset = async (req, res, handleErr) => {
             fileName = `${video.name}-audio.aac`;
             break;
         case 'resize':
-            const dimensions = req.params.get('dimension');
-            file = await fs.open(`${videoDir}/${dimensions}.${video.extension}`, 'r');
+            const dimensions = req.params.get('dimensions');
+            file = await fs.open(`${videoDir}/original-${dimensions}.${video.extension}`, 'r');
             mimeType = 'video/mp4';
             fileName = `${video.name}-${dimensions}.${video.extension}`;
             break;
@@ -137,16 +139,39 @@ const extractAudio = async (req, res, handleErr) => {
             message: 'Audio extracted successfully'
         });
     } catch (e) {
-        util.deleteFile(targetAudioPath);
+        await util.deleteFile(targetAudioPath);
         return handleErr(e);
     }
 
 }
+
+const resizeVideo = async (req, res, handleErr) => {
+    const {videoId, width, height } = req.body;
+    DB.update();
+    const video = DB.videos.find((video) => video.videoId === videoId);
+
+    if (!video) return handleErr({status: 404, message: 'Video not found'});
+    const resizeKey = `${width}x${height}`;
+    video.resizes[resizeKey] = {processing: true};
+    DB.save();
+    jobs.enqueue({
+        type: 'resize',
+        videoId,
+        width,
+        height
+    })
+    res.status(200).json({
+        status: 'success',
+        message: 'The video is now being processed. Please wait a few seconds.'
+    })
+}
+
 const controller = {
     getVideos,
     uploadVideo,
     getVideoAsset,
-    extractAudio
+    extractAudio,
+    resizeVideo
 };
 
 module.exports = controller;

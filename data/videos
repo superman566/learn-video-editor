@@ -1,1 +1,1 @@
-[]
+[{"id":1,"videoId":"c6b26cc7","name":"maxey lol","extension":"mp4","dimensions":{"width":1088,"height":1472},"userId":1,"extractedAudio":true,"resizes":{"580x500":{"processing":false},"300x200":{"processing":false}}},{"id":0,"videoId":"141f4864","name":"test","extension":"mp4","dimensions":{"width":1280,"height":720},"userId":1,"extractedAudio":false,"resizes":{"900x600":{"processing":false},"500x350":{"processing":false},"200x200":{"processing":false},"100x80":{"processing":false}}}]
