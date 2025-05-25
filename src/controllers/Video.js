@@ -2,13 +2,18 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const { pipeline } = require('node:stream/promises');
+const cluster = require("node:cluster");
 
 const util = require('../../lib/util.js');
 const FF = require('../../lib/FF.js');
 const JobQueue = require('../../lib/JobQueue.js');
 const DB = require("../DB.js");
 
-const jobs = new JobQueue();
+
+let jobs;
+if(cluster.isPrimary) {
+    jobs = new JobQueue();
+};
 
 const getVideos = (req, res, handleErr) => {
     DB.update();
@@ -154,12 +159,20 @@ const resizeVideo = async (req, res, handleErr) => {
     const resizeKey = `${width}x${height}`;
     video.resizes[resizeKey] = {processing: true};
     DB.save();
-    jobs.enqueue({
-        type: 'resize',
-        videoId,
-        width,
-        height
-    })
+    if(cluster.isPrimary) {
+        jobs.enqueue({
+            type: 'resize',
+            videoId,
+            width,
+            height
+        })
+    } else {
+        process.send({
+            messageType: 'new-resize',
+            data: {videoId, width, height}
+        });
+    }
+
     res.status(200).json({
         status: 'success',
         message: 'The video is now being processed. Please wait a few seconds.'
